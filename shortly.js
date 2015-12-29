@@ -19,6 +19,8 @@ var app = express();
 var GITHUB_CLIENT_ID = "db37fd8e98e3b468aaa6";
 var GITHUB_CLIENT_SECRET = "e99b28f3927a9ea4c993c37146eeab8bf94e305e";
 
+var authMethod = 'session';
+
 passport.serializeUser(function(user, done) {
   done(null, user);
 });
@@ -33,7 +35,7 @@ passport.use(new GitHubStrategy({
     callbackURL: "http://localhost:4568/auth/github/callback"
   },
   function(accessToken, refreshToken, profile, done) {
-    // asynchronous verification, for effect...
+    authMethod = 'oauth';
     new User({
       'profile_id': profile.id,
       'username': profile.username
@@ -46,16 +48,12 @@ passport.use(new GitHubStrategy({
           'username': profile.username,
           'password': ''
         }).save().then(function() {
-          //Redirect to root
-          //res.redirect('/');
           return done(null, profile);
         });
       }
     });
   }
 ));
-
-
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
@@ -94,16 +92,26 @@ app.get('/auth/github/callback',
     res.redirect('/');
   });
 
-app.get('/logout', function(req, res) {
-  req.logout();
-  res.redirect('/');
-});
+// app.get('/logout', function(req, res) {
+//   req.logout();
+//   res.redirect('/');
+// });
 
 function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) {
-    return next();
+  if (authMethod === 'oauth') {
+    if (req.isAuthenticated()) {
+      return next();
+    }
+    res.redirect('/login');
+  } else {
+    if (req.session.user) {
+      next();
+    } else {
+      // console.log('redirect');
+      // req.session.error = 'Access denied!';
+      res.redirect('/login');
+    }
   }
-  res.redirect('/login');
 }
 
 function restrict(req, res, next) {
@@ -135,8 +143,14 @@ app.get('/links', ensureAuthenticated,
   });
 
 app.get('/logout', function(req, res) {
-  req.logout();
-  res.redirect('/');
+  if (authMethod === 'oauth') {
+    req.logout();
+    res.redirect('/');
+  } else {
+    req.session.destroy(function() {
+      res.redirect('/');
+    });
+  }
 });
 
 app.post('/links',
@@ -206,6 +220,7 @@ app.post('/login', function(req, res) {
         console.log(result);
         if (result) {
           //login
+          authMethod = 'session';
           req.session.regenerate(function() {
             req.session.user = req.body.username;
             res.redirect('/');
@@ -231,6 +246,7 @@ app.post('/signup', function(req, res) {
         'password': hash
       }).save().then(function() {
         //Redirect to index
+        authMethod = 'session';
         req.session.regenerate(function() {
           req.session.user = req.body.username;
           console.log('new user:' + req.session.user);
