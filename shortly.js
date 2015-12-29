@@ -25,7 +25,7 @@ app.use(bodyParser.urlencoded({
 
 app.use(express.static(__dirname + '/public'));
 
-app.use(session({ 
+app.use(session({
   secret: 'keyboard cat',
   resave: false,
   saveUninitialized: true
@@ -102,9 +102,33 @@ app.get('/login', function(req, res) {
   res.render(__dirname + '/views/login.ejs');
 });
 
+app.get('/logout', function(req, res) {
+  req.session.destroy(function() {
+    res.redirect('/');
+  });
+});
+
 //Handle signup request
 app.get('/signup', function(req, res) {
   res.render(__dirname + '/views/signup.ejs');
+});
+
+app.post('/login', function(req, res) {
+  new User({
+    'username': req.body.username,
+    'password': req.body.password
+  }).fetch().then(function(results) {
+    console.log('result:' + results);
+    console.log(JSON.stringify(results));
+    if (results) {
+      req.session.regenerate(function() {
+        req.session.user = req.body.username;
+        res.redirect('/');
+      });
+    } else {
+      
+    }
+  });
 });
 
 app.post('/signup', function(req, res) {
@@ -115,7 +139,7 @@ app.post('/signup', function(req, res) {
     //Redirect to index
     req.session.regenerate(function() {
       req.session.user = req.body.username;
-      console.log('new user:'+ req.session.user);
+      console.log('new user:' + req.session.user);
       // res.send(, this)
       res.redirect('/');
     });
