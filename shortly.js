@@ -32,7 +32,7 @@ app.use(session({
 }));
 
 function restrict(req, res, next) {
-  console.log("req.session.user is:", req.session.user);
+  // console.log("req.session.user is:", req.session.user);
   if (req.session.user) {
     next();
   } else {
@@ -52,7 +52,7 @@ app.get('/create', restrict,
     res.render('index');
   });
 
-app.get('/links',
+app.get('/links',restrict,
   function(req, res) {
     Links.reset().fetch().then(function(links) {
       res.send(200, links.models);
@@ -118,15 +118,15 @@ app.post('/login', function(req, res) {
     'username': req.body.username,
     'password': req.body.password
   }).fetch().then(function(results) {
-    console.log('result:' + results);
-    console.log(JSON.stringify(results));
+    // console.log('result:' + results);
+    // console.log(JSON.stringify(results));
     if (results) {
       req.session.regenerate(function() {
         req.session.user = req.body.username;
         res.redirect('/');
       });
     } else {
-      
+      res.redirect('/login');
     }
   });
 });
