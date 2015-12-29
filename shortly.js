@@ -4,6 +4,8 @@ var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var session = require('express-session');
 var bcrypt = require('bcrypt');
+var passport = require('passport');
+var GitHubStrategy = require('passport-github').Strategy;
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -13,6 +15,47 @@ var Link = require('./app/models/link');
 var Click = require('./app/models/click');
 
 var app = express();
+
+var GITHUB_CLIENT_ID = "db37fd8e98e3b468aaa6";
+var GITHUB_CLIENT_SECRET = "e99b28f3927a9ea4c993c37146eeab8bf94e305e";
+
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function(obj, done) {
+  done(null, obj);
+});
+
+passport.use(new GitHubStrategy({
+    clientID: GITHUB_CLIENT_ID,
+    clientSecret: GITHUB_CLIENT_SECRET,
+    callbackURL: "http://localhost:4568/auth/github/callback"
+  },
+  function(accessToken, refreshToken, profile, done) {
+    // asynchronous verification, for effect...
+    new User({
+      'profile_id': profile.id,
+      'username': profile.username
+    }).fetch().then(function(results) {
+      if (results) {
+        return done(null, profile);
+      } else {
+        new User({
+          'profile_id': profile.id,
+          'username': profile.username,
+          'password': ''
+        }).save().then(function() {
+          //Redirect to root
+          //res.redirect('/');
+          return done(null, profile);
+        });
+      }
+    });
+  }
+));
+
+
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
@@ -32,6 +75,37 @@ app.use(session({
   saveUninitialized: true
 }));
 
+app.use(passport.initialize());
+app.use(passport.session());
+
+app.get('/auth/github',
+  passport.authenticate('github'),
+  function(req, res) {
+    // The request will be redirected to GitHub for authentication, so this
+    // function will not be called.
+  });
+
+app.get('/auth/github/callback',
+  passport.authenticate('github', {
+    failureRedirect: '/login'
+  }),
+  function(req, res) {
+    console.log('logged in');
+    res.redirect('/');
+  });
+
+app.get('/logout', function(req, res) {
+  req.logout();
+  res.redirect('/');
+});
+
+function ensureAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.redirect('/login');
+}
+
 function restrict(req, res, next) {
   // console.log("req.session.user is:", req.session.user);
   if (req.session.user) {
@@ -43,22 +117,27 @@ function restrict(req, res, next) {
   }
 }
 
-app.get('/', restrict,
+app.get('/', ensureAuthenticated,
   function(req, res) {
     res.render('index');
   });
 
-app.get('/create', restrict,
+app.get('/create', ensureAuthenticated,
   function(req, res) {
     res.render('index');
   });
 
-app.get('/links', restrict,
+app.get('/links', ensureAuthenticated,
   function(req, res) {
     Links.reset().fetch().then(function(links) {
       res.send(200, links.models);
     });
   });
+
+app.get('/logout', function(req, res) {
+  req.logout();
+  res.redirect('/');
+});
 
 app.post('/links',
   function(req, res) {
@@ -103,11 +182,11 @@ app.get('/login', function(req, res) {
   res.render(__dirname + '/views/login.ejs');
 });
 
-app.get('/logout', function(req, res) {
-  req.session.destroy(function() {
-    res.redirect('/');
-  });
-});
+// app.get('/logout', function(req, res) {
+//   req.session.destroy(function() {
+//     res.redirect('/');
+//   });
+// });
 
 //Handle signup request
 app.get('/signup', function(req, res) {
@@ -123,7 +202,7 @@ app.post('/login', function(req, res) {
   }).fetch().then(function(results) {
     console.log('results:' + results);
     if (results) {
-        bcrypt.compare(password, results.get('password'), function(err, result) {
+      bcrypt.compare(password, results.get('password'), function(err, result) {
         console.log(result);
         if (result) {
           //login
