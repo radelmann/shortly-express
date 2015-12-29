@@ -2,7 +2,7 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
-
+var session = require('express-session');
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -19,63 +19,112 @@ app.use(partials());
 // Parse JSON (uniform resource locators)
 app.use(bodyParser.json());
 // Parse forms (signup/login)
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
+
 app.use(express.static(__dirname + '/public'));
 
+app.use(session({ 
+  secret: 'keyboard cat',
+  resave: false,
+  saveUninitialized: true
+}));
 
-app.get('/', 
-function(req, res) {
-  res.render('index');
-});
-
-app.get('/create', 
-function(req, res) {
-  res.render('index');
-});
-
-app.get('/links', 
-function(req, res) {
-  Links.reset().fetch().then(function(links) {
-    res.send(200, links.models);
-  });
-});
-
-app.post('/links', 
-function(req, res) {
-  var uri = req.body.url;
-
-  if (!util.isValidUrl(uri)) {
-    console.log('Not a valid url: ', uri);
-    return res.send(404);
+function restrict(req, res, next) {
+  console.log("req.session.user is:", req.session.user);
+  if (req.session.user) {
+    next();
+  } else {
+    // console.log('redirect');
+    // req.session.error = 'Access denied!';
+    res.redirect('/login');
   }
+}
 
-  new Link({ url: uri }).fetch().then(function(found) {
-    if (found) {
-      res.send(200, found.attributes);
-    } else {
-      util.getUrlTitle(uri, function(err, title) {
-        if (err) {
-          console.log('Error reading URL heading: ', err);
-          return res.send(404);
-        }
-
-        Links.create({
-          url: uri,
-          title: title,
-          base_url: req.headers.origin
-        })
-        .then(function(newLink) {
-          res.send(200, newLink);
-        });
-      });
-    }
+app.get('/', restrict,
+  function(req, res) {
+    res.render('index');
   });
-});
+
+app.get('/create', restrict,
+  function(req, res) {
+    res.render('index');
+  });
+
+app.get('/links',
+  function(req, res) {
+    Links.reset().fetch().then(function(links) {
+      res.send(200, links.models);
+    });
+  });
+
+app.post('/links',
+  function(req, res) {
+    var uri = req.body.url;
+
+    if (!util.isValidUrl(uri)) {
+      console.log('Not a valid url: ', uri);
+      return res.send(404);
+    }
+
+    new Link({
+      url: uri
+    }).fetch().then(function(found) {
+      if (found) {
+        res.send(200, found.attributes);
+      } else {
+        util.getUrlTitle(uri, function(err, title) {
+          if (err) {
+            console.log('Error reading URL heading: ', err);
+            return res.send(404);
+          }
+
+          Links.create({
+              url: uri,
+              title: title,
+              base_url: req.headers.origin
+            })
+            .then(function(newLink) {
+              res.send(200, newLink);
+            });
+        });
+      }
+    });
+  });
 
 /************************************************************/
 // Write your authentication routes here
 /************************************************************/
 
+//Handle login request
+app.get('/login', function(req, res) {
+  res.render(__dirname + '/views/login.ejs');
+});
+
+//Handle signup request
+app.get('/signup', function(req, res) {
+  res.render(__dirname + '/views/signup.ejs');
+});
+
+app.post('/signup', function(req, res) {
+  new User({
+    'username': req.body.username,
+    'password': req.body.password
+  }).save().then(function() {
+    //Redirect to index
+    req.session.regenerate(function() {
+      req.session.user = req.body.username;
+      console.log('new user:'+ req.session.user);
+      // res.send(, this)
+      res.redirect('/');
+    });
+  });
+});
+
+//Handle logout request
+//take user back to the main page
+//clear session
 
 
 /************************************************************/
@@ -85,7 +134,9 @@ function(req, res) {
 /************************************************************/
 
 app.get('/*', function(req, res) {
-  new Link({ code: req.params[0] }).fetch().then(function(link) {
+  new Link({
+    code: req.params[0]
+  }).fetch().then(function(link) {
     if (!link) {
       res.redirect('/');
     } else {
@@ -94,7 +145,7 @@ app.get('/*', function(req, res) {
       });
 
       click.save().then(function() {
-        link.set('visits', link.get('visits')+1);
+        link.set('visits', link.get('visits') + 1);
         link.save().then(function() {
           return res.redirect(link.get('url'));
         });

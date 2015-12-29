@@ -2,9 +2,11 @@ var db = require('../config');
 var bcrypt = require('bcrypt-nodejs');
 var Promise = require('bluebird');
 
-
-
 var User = db.Model.extend({
+  tableName: 'users',
+  hasTimestamps: true
 });
 
 module.exports = User;
+
+//Add in an initialize to hash the password upon creation of new users
