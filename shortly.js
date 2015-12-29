@@ -3,6 +3,7 @@ var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var session = require('express-session');
+var bcrypt = require('bcrypt');
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -52,7 +53,7 @@ app.get('/create', restrict,
     res.render('index');
   });
 
-app.get('/links',restrict,
+app.get('/links', restrict,
   function(req, res) {
     Links.reset().fetch().then(function(links) {
       res.send(200, links.models);
@@ -114,16 +115,25 @@ app.get('/signup', function(req, res) {
 });
 
 app.post('/login', function(req, res) {
+  var username = req.body.username;
+  var password = req.body.password;
+
   new User({
-    'username': req.body.username,
-    'password': req.body.password
+    'username': username,
   }).fetch().then(function(results) {
-    // console.log('result:' + results);
-    // console.log(JSON.stringify(results));
+    console.log('results:' + results);
     if (results) {
-      req.session.regenerate(function() {
-        req.session.user = req.body.username;
-        res.redirect('/');
+        bcrypt.compare(password, results.get('password'), function(err, result) {
+        console.log(result);
+        if (result) {
+          //login
+          req.session.regenerate(function() {
+            req.session.user = req.body.username;
+            res.redirect('/');
+          });
+        } else {
+          res.redirect('/login');
+        }
       });
     } else {
       res.redirect('/login');
@@ -132,16 +142,22 @@ app.post('/login', function(req, res) {
 });
 
 app.post('/signup', function(req, res) {
-  new User({
-    'username': req.body.username,
-    'password': req.body.password
-  }).save().then(function() {
-    //Redirect to index
-    req.session.regenerate(function() {
-      req.session.user = req.body.username;
-      console.log('new user:' + req.session.user);
-      // res.send(, this)
-      res.redirect('/');
+  var username = req.body.username;
+  var password = req.body.password;
+
+  bcrypt.genSalt(10, function(err, salt) {
+    bcrypt.hash(password, salt, function(err, hash) {
+      new User({
+        'username': username,
+        'password': hash
+      }).save().then(function() {
+        //Redirect to index
+        req.session.regenerate(function() {
+          req.session.user = req.body.username;
+          console.log('new user:' + req.session.user);
+          res.redirect('/');
+        });
+      });
     });
   });
 });
