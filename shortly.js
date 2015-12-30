@@ -168,7 +168,7 @@ app.post('/links',
       if (found) {
         res.send(200, found.attributes);
       } else {
-        util.getUrlTitle(uri, function(err, title) {
+        util.getUrlTitle(uri, function(err, title, image_url) {
           if (err) {
             console.log('Error reading URL heading: ', err);
             return res.send(404);
@@ -177,6 +177,7 @@ app.post('/links',
           Links.create({
               url: uri,
               title: title,
+              image_url: image_url,
               base_url: req.headers.origin
             })
             .then(function(newLink) {
