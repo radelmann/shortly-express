@@ -193,7 +193,7 @@ app.post('/links',
 
 //Handle login request
 app.get('/login', function(req, res) {
-  res.render(__dirname + '/views/login.ejs');
+  res.render(__dirname + '/views/login.ejs', {errorCss:"class=hidden"});
 });
 
 // app.get('/logout', function(req, res) {
@@ -226,11 +226,11 @@ app.post('/login', function(req, res) {
             res.redirect('/');
           });
         } else {
-          res.redirect('/login');
+          res.render(__dirname + '/views/login.ejs',{errorCss:""} );    
         }
       });
     } else {
-      res.redirect('/login');
+      res.render(__dirname + '/views/login.ejs',{errorCss:""} );
     }
   });
 });
